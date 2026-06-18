@@ -12,9 +12,6 @@ async function put_object_retention(req) {
     if (!config.WORM_ENABLED) {
         throw new S3Error(S3Error.NotImplemented);
     }
-    if (!req.content_md5) {
-        throw new S3Error(S3Error.InvalidDigest);
-    }
     if (!req.body.Retention) throw new S3Error(S3Error.MalformedXML);
     const mode = req.body.Retention.Mode[0];
     let retain_until_date = req.body.Retention.RetainUntilDate[0];

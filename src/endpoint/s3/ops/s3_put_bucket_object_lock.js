@@ -11,9 +11,6 @@ async function put_bucket_object_lock(req, res) {
     if (!config.WORM_ENABLED) {
         throw new S3Error(S3Error.NotImplemented);
     }
-    if (!req.content_md5) {
-        throw new S3Error(S3Error.InvalidDigest);
-    }
     if (req.body.ObjectLockConfiguration.ObjectLockEnabled[0] !== 'Enabled') {
         throw new S3Error(S3Error.MalformedXML);
     }

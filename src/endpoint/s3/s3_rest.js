@@ -539,6 +539,10 @@ function _prepare_error(req, res, err) {
         s3err.detail = err.rpc_data.detail;
     }
 
+    if (!(err instanceof S3Error) && s3err.code === 'InvalidBucketState' && err.message) {
+        s3err.message = err.message;
+    }
+
     if (err.rpc_data) {
         if (err.rpc_data.etag) {
             if (res.headersSent) {
