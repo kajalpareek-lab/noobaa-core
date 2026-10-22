@@ -96,6 +96,26 @@ function compute_checksum_b64(algorithm, data) {
 }
 
 /**
+ * Builds a composite checksum from per-part checksums (AWS multipart format).
+ * Concatenates the raw digest bytes of all parts, hashes them again,
+ * and returns "base64hash-N" where N is the number of parts.
+ * @param {string} algorithm - S3 algorithm name (e.g. 'SHA512')
+ * @param {string[]} part_checksums_b64 - array of base64-encoded per-part checksums
+ * @returns {string} composite checksum in "base64-N" format
+ */
+function build_composite_checksum(algorithm, part_checksums_b64) {
+    if (!part_checksums_b64 || !part_checksums_b64.length) {
+        throw new Error('build_composite_checksum: no part checksums provided');
+    }
+    const hasher = create_checksum_hasher(algorithm);
+    if (!hasher) throw new Error(`Unsupported checksum algorithm: ${algorithm}`);
+    for (const part_b64 of part_checksums_b64) {
+        hasher.update(Buffer.from(part_b64, 'base64'));
+    }
+    return hasher.digest('base64') + '-' + part_checksums_b64.length;
+}
+
+/**
  * @param {string} algorithm
  * @returns {string | undefined} e.g. 'x-amz-checksum-sha512'
  */
@@ -129,5 +149,6 @@ exports.parse_checksum_params = parse_checksum_params;
 exports.parse_checksum_params_from_trailers = parse_checksum_params_from_trailers;
 exports.create_checksum_hasher = create_checksum_hasher;
 exports.compute_checksum_b64 = compute_checksum_b64;
+exports.build_composite_checksum = build_composite_checksum;
 exports.get_checksum_response_header = get_checksum_response_header;
 exports.set_response_checksum_headers = set_response_checksum_headers;

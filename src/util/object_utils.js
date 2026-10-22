@@ -43,6 +43,7 @@ const CREATE_MULTIPART_PARAMS = [
     'md5_b64',
     'sha256_b64',
     'encryption',
+    'checksum_params',
 ];
 
 const COMPLETE_MULTIPART_PARAMS = [
@@ -51,6 +52,7 @@ const COMPLETE_MULTIPART_PARAMS = [
     'bucket',
     'key',
     'num',
+    'checksum_params',
 ];
 
 /**

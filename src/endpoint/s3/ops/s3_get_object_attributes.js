@@ -59,9 +59,18 @@ function _parse_attributes(req) {
  * @returns {object}
  */
 function _make_reply_according_to_attributes(reply, attributes) {
+    // Build Checksum object from stored checksum fields (AWS format)
+    let checksum;
+    if (reply.checksum_algorithm === 'SHA512' && reply.checksum_value) {
+        checksum = { ChecksumSHA512: reply.checksum_value };
+        if (reply.checksum_type) {
+            checksum.ChecksumType = reply.checksum_type;
+        }
+    }
+
     const reply_without_filter = {
         ETag: `"${reply.etag}"`,
-        Checksum: reply.checksum,
+        Checksum: checksum,
         ObjectParts: reply.object_parts,
         StorageClass: reply.storage_class,
         ObjectSize: reply.size

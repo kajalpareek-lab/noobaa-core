@@ -6,6 +6,7 @@ const S3Error = require('../s3_errors').S3Error;
 const s3_utils = require('../s3_utils');
 const http_utils = require('../../../util/http_utils');
 const rdma_utils = require('../../../util/rdma_utils');
+const checksum_utils = require('../../../util/checksum_utils');
 
 const s3_error_options = {
     ErrorClass: S3Error,
@@ -48,7 +49,8 @@ async function put_object_uploadId(req, res) {
             md5_b64,
             sha256_b64,
             source_md_conditions: http_utils.get_md_conditions(req, 'x-amz-copy-source-'),
-            encryption
+            encryption,
+            checksum_params: copy_source ? undefined : checksum_utils.parse_checksum_params(req),
         });
     } catch (e) {
         if (e.code === 'InvalidArgument') {

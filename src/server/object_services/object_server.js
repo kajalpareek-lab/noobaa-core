@@ -38,6 +38,7 @@ const CONSTANTS = require('../../common/constants');
 const Quota = require('../system_services/objects/quota');
 const { STORAGE_CLASS_STANDARD, GLACIER_STORAGE_CLASSES } = require('../../endpoint/s3/s3_utils');
 const { is_expired_restore_pending_purge, is_transition_source_pending_purge } = require('../../util/deep_archive_utils');
+const checksum_utils = require('../../util/checksum_utils');
 
 // short living cache for objects
 // the purpose is to reduce hitting the DB many many times per second during upload/download.
@@ -499,6 +500,13 @@ async function _complete_multipart_upload(req) {
         set_updates.etag = Buffer.from(req.rpc_params.md5_b64, 'base64').toString('hex');
     }
 
+    // Store composite checksum computed from per-part checksums
+    if (map_res.composite_checksum) {
+        set_updates.checksum_algorithm = map_res.composite_checksum.checksum_algorithm;
+        set_updates.checksum_value = map_res.composite_checksum.checksum_value;
+        set_updates.checksum_type = map_res.composite_checksum.checksum_type;
+    }
+
     set_updates.create_time = new Date();
     if (req.bucket.namespace && req.bucket.namespace.caching) {
         set_updates.cache_last_valid_time = new Date();
@@ -530,6 +538,9 @@ async function _complete_multipart_upload(req) {
         size: set_updates.size,
         content_type: obj.content_type,
         seq: set_updates.version_seq,
+        checksum_algorithm: set_updates.checksum_algorithm || undefined,
+        checksum_value: set_updates.checksum_value || undefined,
+        checksum_type: set_updates.checksum_type || undefined,
     };
 }
 
@@ -721,6 +732,11 @@ async function create_multipart(req) {
         sha256_b64: req.rpc_params.sha256_b64,
         uncommitted: true,
     };
+    if (req.rpc_params.checksum_params) {
+        const { checksum_algorithm, checksum_value } = req.rpc_params.checksum_params;
+        if (checksum_algorithm) multipart.checksum_algorithm = checksum_algorithm;
+        if (checksum_value) multipart.checksum_value = checksum_value;
+    }
 
     await MDStore.instance().insert_multipart(multipart);
     return {
@@ -781,6 +797,11 @@ async function complete_multipart(req) {
         }
         set_updates.sha256_b64 = req.rpc_params.sha256_b64;
     }
+    if (req.rpc_params.checksum_params) {
+        const { checksum_algorithm, checksum_value } = req.rpc_params.checksum_params;
+        if (checksum_algorithm) set_updates.checksum_algorithm = checksum_algorithm;
+        if (checksum_value) set_updates.checksum_value = checksum_value;
+    }
     set_updates.num_parts = req.rpc_params.num_parts;
     set_updates.create_time = new Date();
     // STANDARD MPU keeps digest-derived etags (md5_b64) 
@@ -795,6 +816,8 @@ async function complete_multipart(req) {
     return {
         etag: get_etag(multipart, set_updates),
         create_time: set_updates.create_time.getTime(),
+        checksum_algorithm: set_updates.checksum_algorithm || multipart.checksum_algorithm || undefined,
+        checksum_value: set_updates.checksum_value || multipart.checksum_value || undefined,
         encryption: obj.encryption
     };
 }
@@ -2057,6 +2080,9 @@ function get_object_info(md, options = {}) {
             reads: 0,
             last_read: 0,
         },
+        checksum_algorithm: md.checksum_algorithm || undefined,
+        checksum_value: md.checksum_value || undefined,
+        checksum_type: md.checksum_type || undefined,
         tagging: md.tagging,
         encryption: md.encryption,
         tag_count: (md.tagging && md.tagging.length) || 0,
@@ -2659,6 +2685,9 @@ async function _complete_object_multiparts(obj, multipart_req) {
     const multiparts_by_num = _.groupBy(multiparts, 'num');
     const used_parts = [];
     const used_multiparts = [];
+    // Collect per-part checksums for composite computation
+    let checksum_algorithm;
+    const part_checksums = [];
 
     for (const { num, etag } of multipart_req) {
         if (num !== next_part_num) {
@@ -2679,6 +2708,11 @@ async function _complete_object_multiparts(obj, multipart_req) {
             md5.update(Buffer.from(mp.md5_b64, 'base64'));
         } else {
             md5.update(get_etag(mp));
+        }
+        // Collect per-part additional checksums for composite
+        if (mp.checksum_value && mp.checksum_algorithm) {
+            if (!checksum_algorithm) checksum_algorithm = mp.checksum_algorithm;
+            part_checksums.push(mp.checksum_value);
         }
         const mp_parts = parts_by_mp[mp._id.toHexString()] || [];
         _complete_next_parts(mp_parts, context);
@@ -2705,10 +2739,21 @@ async function _complete_object_multiparts(obj, multipart_req) {
         chunks_to_dereference.length && map_deleter.delete_chunks_if_unreferenced(chunks_to_dereference),
     ]);
 
+    // Build composite checksum if all parts had additional checksums
+    let composite_checksum;
+    if (checksum_algorithm && part_checksums.length === (next_part_num - 1)) {
+        composite_checksum = {
+            checksum_algorithm,
+            checksum_value: checksum_utils.build_composite_checksum(checksum_algorithm, part_checksums),
+            checksum_type: checksum_utils.CHECKSUM_TYPE.COMPOSITE,
+        };
+    }
+
     return {
         size: context.pos,
         num_parts: context.num_parts,
         multipart_etag,
+        composite_checksum,
     };
 }
 
