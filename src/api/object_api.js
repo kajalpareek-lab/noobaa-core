@@ -196,9 +196,7 @@ module.exports = {
                     content_encoding: { type: 'string' },
                     size: { type: 'integer' },
                     seq: { type: 'integer' },
-                    checksum_algorithm: { type: 'string' },
-                    checksum_value: { type: 'string' },
-                    checksum_type: { type: 'string' },
+                    checksum_params: { $ref: '#/definitions/checksum_params' },
                 }
             },
             auth: { system: ['admin', 'user'] }
@@ -359,9 +357,7 @@ module.exports = {
                         idate: true
                     },
                     encryption: { $ref: 'common_api#/definitions/object_encryption' },
-                    checksum_algorithm: { type: 'string' },
-                    checksum_value: { type: 'string' },
-                    checksum_type: { type: 'string' },
+                    checksum_params: { $ref: '#/definitions/checksum_params' },
                 }
             },
             auth: { system: ['admin', 'user'] }
