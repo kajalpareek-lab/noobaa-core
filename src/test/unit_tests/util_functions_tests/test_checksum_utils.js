@@ -136,23 +136,6 @@ mocha.describe('checksum_utils', function() {
         });
     });
 
-    mocha.describe('compute_checksum_b64', function() {
-
-        mocha.it('should compute SHA512 checksum in base64', function() {
-            const data = Buffer.from('hello world');
-            const result = checksum_utils.compute_checksum_b64('SHA512', data);
-            const expected = crypto.createHash('sha512').update(data).digest('base64');
-            assert.strictEqual(result, expected);
-        });
-
-        mocha.it('should throw for unsupported algorithm', function() {
-            assert.throws(
-                () => checksum_utils.compute_checksum_b64('SHA256', Buffer.from('x')),
-                /Unsupported checksum algorithm/
-            );
-        });
-    });
-
     mocha.describe('get_checksum_response_header', function() {
 
         mocha.it('should return correct header for SHA512', function() {

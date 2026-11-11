@@ -119,17 +119,6 @@ function checksum_reply_fields(primary, fallback) {
 
 /**
  * @param {string} algorithm
- * @param {Buffer} data
- * @returns {string} base64-encoded checksum
- */
-function compute_checksum_b64(algorithm, data) {
-    const hasher = create_checksum_hasher(algorithm);
-    if (!hasher) throw new Error(`Unsupported checksum algorithm: ${algorithm}`);
-    return hasher.update(data).digest('base64');
-}
-
-/**
- * @param {string} algorithm
  * @returns {string | undefined} e.g. 'x-amz-checksum-sha512'
  */
 function get_checksum_response_header(algorithm) {
@@ -163,6 +152,5 @@ exports.parse_checksum_params_from_trailers = parse_checksum_params_from_trailer
 exports.create_checksum_hasher = create_checksum_hasher;
 exports.assign_checksum_fields = assign_checksum_fields;
 exports.checksum_reply_fields = checksum_reply_fields;
-exports.compute_checksum_b64 = compute_checksum_b64;
 exports.get_checksum_response_header = get_checksum_response_header;
 exports.set_response_checksum_headers = set_response_checksum_headers;
