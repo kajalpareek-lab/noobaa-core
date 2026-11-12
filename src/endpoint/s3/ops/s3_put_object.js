@@ -31,8 +31,8 @@ async function put_object(req, res) {
         throw new S3Error(S3Error.InvalidStorageClass);
     }
     const lock_settings = s3_utils.parse_lock_header(req);
-    // Copy does not stream the new object body, so a client-supplied checksum
-    // cannot be checked here. Do not store it.
+    // The copy request's checksum is not the object's digest. The source object's
+    // stored SHA-512 is applied later, the same way MD5 and SHA-256 are.
     const checksum_params = copy_source ? undefined : s3_utils.parse_checksum_params(req);
     // Copy request sends empty content and not relevant to the object data
     const { size, md5_b64, sha256_b64 } = copy_source ? {} : {
