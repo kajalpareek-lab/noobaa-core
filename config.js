@@ -147,10 +147,27 @@ config.ENABLE_DEV_RANDOM_SEED = process.env.DISABLE_DEV_RANDOM_SEED === 'false' 
 ////////////////
 
 config.AGENT_RPC_PROTOCOL = 'n2n';
-config.AGENT_RPC_PORT = process.env.AGENT_PORT || '9999';
+// Default agent WSS listen (PV-pool). Must match noobaa-pvpool NetworkPolicy (60101-60600).
+config.AGENT_RPC_PORT = process.env.AGENT_PORT || '60101';
+// When AGENT_RPC_PORT is busy (e.g. hostNetwork and another agent on the same node),
+// try the next ports in this range. Endpoints advertise the port that actually bound.
+config.AGENT_RPC_PORT_RANGE_MIN = 60101;
+config.AGENT_RPC_PORT_RANGE_MAX = 60600;
 
 config.RPC_CONNECT_TIMEOUT = 120 * 1000;
 config.RPC_SEND_TIMEOUT = 120 * 1000;
+// Per-endpoint WSS dial handshake timeout.
+// Must stay below RPC_CONNECT_TIMEOUT.
+config.N2N_WSS_DIAL_TIMEOUT_MS = 15 * 1000;
+// Start another endpoint after this delay if no WSS dial has won yet.
+config.N2N_WSS_DIAL_DELAY_MS = 250;
+
+// How long a system may stay in INITIALIZING before _init() treats it as a
+// create_system that died mid-way and completes it. Must be safely above the
+// longest a real create_system can run (bounded by RPC_SEND_TIMEOUT above) so a
+// legitimately in-flight create_system - on this or any replica - is never
+// prematurely recovered.
+config.CREATE_SYSTEM_INITIALIZING_GRACE_MS = 3 * 60 * 1000;
 
 config.RPC_PING_INTERVAL_MS = 20000;
 // setting number of pings above the time it takes to get connect timeout
@@ -160,11 +177,16 @@ config.RECONN_BACKOFF_BASE = 250;
 config.RECONN_BACKOFF_MAX = 5000;
 config.RECONN_BACKOFF_FACTOR = 1.2;
 
+// Cloud hosted agents' N2N listen on core. Must match noobaa-core NetworkPolicy (60100).
 config.CLOUD_AGENTS_N2N_PORT = 60100;
 // TODO: Should check what PORT we are interested in taking
 config.MONGO_AGENTS_N2N_PORT = 60100;
 
 config.N2N_OFFER_INTERNAL = false;
+
+// When true, use legacy ICE for n2n peers (instead of WSS).
+// All agents and core n2n clients must use the same value (no mixed wire protocol).
+config.ROLLBACK_N2N_TO_ICE = process.env.ROLLBACK_N2N_TO_ICE === 'true';
 
 /////////////////////
 // ENDPOINT CONFIG //
@@ -285,8 +307,6 @@ config.MESSAGE_QUEUE_DEFAULT_RETRY_DELAY_MS = 1000;
 config.MESSAGE_QUEUE_DEFAULT_CAPACITY = 10000;
 config.MESSAGE_QUEUE_DEFAULT_DEAD_RETENTION_MS = 24 * 60 * 60 * 1000;
 config.MESSAGE_QUEUE_MAX_DEAD = 100;
-// Queue tables the cleaner visits, including queues created in other processes.
-config.MESSAGE_QUEUE_REGISTERED = Object.freeze([]);
 
 config.MESSAGE_QUEUE_CLEANER_ENABLED = false;
 config.MESSAGE_QUEUE_CLEANER_CYCLE = 15 * 60 * 1000; // 15 minutes, after a pass that deleted rows
@@ -295,9 +315,18 @@ config.MESSAGE_QUEUE_CLEANER_ERROR_DELAY = 60 * 1000; // 1 minute, retry after a
 config.MESSAGE_QUEUE_CLEANER_BATCH_DELAY = 100; // 100ms, delay between batches
 config.MESSAGE_QUEUE_CLEANER_BATCH_SIZE = 1000;
 
+config.BG_EXECUTOR_BATCH_DELAY = 100;
+config.BG_EXECUTOR_EMPTY_DELAY = 1000;
+config.BG_EXECUTOR_ERROR_DELAY = 3000;
+config.BG_EXECUTOR_WORKERS = 1;
+// Percent of executor draws for replication. bg_queues_utils.js stores it on BG_TASK_QUEUES.replication.weight.
+config.REPLICATION_EXECUTOR_WEIGHT = 100;
+
 config.POSTGRES_DEFAULT_MAX_CLIENTS = 10;
 config.POSTGRES_MD_MAX_CLIENTS = (process.env.LOCAL_MD_SERVER === 'true') ? 70 : 10;
 config.POSTGRES_CONNECTION_TIMEOUT_MS = 10 * 1000;
+// Bounds waits for MultiTableBulkOp advisory locks (e.g. system_store.make_changes)
+config.POSTGRES_LOCK_TIMEOUT_MS = 10 * 1000;
 
 //whether to use read-only postgres replica cluster
 //ro host is set by operator in process.env.POSTGRES_HOST_RO
@@ -1249,6 +1278,9 @@ config.GPFS_DOWN_DELAY = 1000;
 //Quota
 config.QUOTA_LOW_THRESHOLD = 80;
 config.QUOTA_MAX_OBJECTS = Number.MAX_SAFE_INTEGER;
+// Endpoint cache of used_bytes/used_objects. Override on the endpoint pod with QUOTA_USAGE_CACHE_EXPIRY_MS (milliseconds).
+config.QUOTA_USAGE_CACHE_EXPIRY_MS = Number(process.env.QUOTA_USAGE_CACHE_EXPIRY_MS) || 1000;
+config.QUOTA_USAGE_CACHE_MAX_ITEMS = 100;
 
 //////////////////////////
 //      STS CONFIG      //

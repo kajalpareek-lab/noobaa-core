@@ -812,6 +812,7 @@ interface DBClient {
     get_db_name(): string;
 
     define_collection(params: object): DBCollection;
+    define_native_table(params: object): DBNativeTable;
     define_sequence(params: object): DBSequence;
     collection(name: string): DBCollection;
     validate(name: string, doc: object, warn?: 'warn'): object;
@@ -844,12 +845,26 @@ interface DBClient {
 
     executeSQL<T>(query: string, params: Array<any>, options?: { query_name?: string, preferred_pool?: string }): Promise<sqlResult<T>>;
 
-    initializeMultiTableBulkOp(pool_name?: string): MultiTableBulkOp;
+    initializeMultiTableBulkOp(options?: {
+        pool_name?: string;
+        transaction_lock?: string;
+    }): MultiTableBulkOp;
 }
 
 interface MultiTableBulkOp {
     length: number;
+    transaction_lock?: string;
     insert_many(entries: { table: DBCollection, docs: object[] }[]): this;
+    insert(table: DBCollection, doc: object): this;
+    findAndUpdateOne(table: DBCollection, find: object, update: object): this;
+    findAndRemoveOne(table: DBCollection, find: object): this;
+    forTable(table: DBCollection): {
+        insert(doc: object): MultiTableBulkOp;
+        find(selector: object): {
+            updateOne(doc: object): MultiTableBulkOp;
+            removeOne(): MultiTableBulkOp;
+        };
+    };
     add_query(sql: string): void;
     execute(): Promise<BulkOpResult>;
 }
@@ -867,6 +882,13 @@ interface DBSequence {
     seqname(): string;
     nextsequence(): Promise<number>;
     nextNsequences(n: number): Promise<{ start: number; end: number}>;
+}
+
+interface DBNativeTable {
+    name: string;
+    schema: any;
+    primary_key?: string[];
+    init_promise?: Promise<void>;
 }
 
 interface sqlResult<T> {
